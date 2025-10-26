@@ -1,4 +1,4 @@
-import { Injectable, inject } from '@angular/core';
+import { Injectable, inject, signal } from '@angular/core';
 import { SwUpdate } from '@angular/service-worker';
 
 @Injectable({
@@ -6,6 +6,8 @@ import { SwUpdate } from '@angular/service-worker';
 })
 export class SwUpdateService {
   private swUpdate = inject(SwUpdate);
+
+  readonly updateAvailable = signal(false);
 
   initialize(): void {
     if (this.swUpdate.isEnabled) {
@@ -20,7 +22,7 @@ export class SwUpdateService {
       // Listen for available updates
       this.swUpdate.versionUpdates.subscribe(event => {
         if (event.type === 'VERSION_READY') {
-          this.promptUserToUpdate();
+          this.updateAvailable.set(true);
         }
       });
     }
@@ -31,31 +33,21 @@ export class SwUpdateService {
       const updateAvailable = await this.swUpdate.checkForUpdate();
       if (updateAvailable) {
         console.log('Update available');
-        this.promptUserToUpdate();
+        this.updateAvailable.set(true);
       }
     } catch (error) {
       console.error('Error checking for updates:', error);
     }
   }
 
-  private promptUserToUpdate(): void {
-    const updateConfirmed = confirm(
-      'A new version of the application is available. Would you like to update now? The page will be refreshed.'
-    );
-
-    if (updateConfirmed) {
-      this.activateUpdate();
-    }
-  }
-
-  private async activateUpdate(): Promise<void> {
+  async applyUpdate(): Promise<void> {
     try {
       await this.swUpdate.activateUpdate();
       // Reload the page to apply the update
       window.location.reload();
     } catch (error) {
       console.error('Error activating update:', error);
-      alert('Failed to update the application. Please refresh the page manually.');
+      throw error;
     }
   }
 }
