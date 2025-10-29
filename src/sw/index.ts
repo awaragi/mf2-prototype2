@@ -1,18 +1,20 @@
 /// <reference lib="webworker" />
 
-import Dexie from "dexie";
+import {Logger} from '../utils/logger';
+
+const logger = new Logger('[CACHE-SW]');
 
 const sw = self as unknown as ServiceWorkerGlobalScope;
 
-console.log('🔧 Custom Service Worker: Script loading...');
+logger.log('🔧 Content Cache Service Worker: Registering events.');
 
 // Add custom fetch event monitoring
 sw.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
-  
+
   // Special logging for /api requests
   if (url.pathname.startsWith('/api')) {
-    console.log('API Request Intercepted:', {
+    logger.debug('API Request Intercepted:', {
       url: event.request.url,
       pathname: url.pathname,
       method: event.request.method,
@@ -21,19 +23,16 @@ sw.addEventListener('fetch', (event) => {
       timestamp: new Date().toISOString()
     });
 
-    const db = new Dexie('TestDB').version(1).stores({ items: '++id,name' });
-    console.log('Dexie DB Initialized in SW:', db.stores);
-
     event.respondWith(
       fetch(event.request)
         .then(async (response) => {
-          console.log('API Response received, processing...');
+          logger.debug('API Response received, processing...');
           // Clone the response so we can read it
           const clonedResponse = response.clone();
-          
+
           try {
             const data = await clonedResponse.json();
-            console.log('API Response Data:', {
+            logger.debug('API Response Data:', {
               pathname: url.pathname,
               status: response.status,
               statusText: response.statusText,
@@ -41,19 +40,19 @@ sw.addEventListener('fetch', (event) => {
               timestamp: new Date().toISOString()
             });
           } catch (e) {
-            console.log('API Response (non-JSON):', {
+            logger.debug('API Response (non-JSON):', {
               pathname: url.pathname,
               status: response.status,
               statusText: response.statusText,
               timestamp: new Date().toISOString()
             });
           }
-          
-          console.log('Returning response to client');
+
+          logger.debug('Returning response to client');
           return response;
         })
         .catch((error) => {
-          console.error('API Request Failed:', {
+          logger.error('API Request Failed:', {
             pathname: url.pathname,
             error: error.message,
             timestamp: new Date().toISOString()
@@ -68,8 +67,9 @@ sw.addEventListener('fetch', (event) => {
   // by not calling event.respondWith() here
 });
 
-console.log('🔧 Custom Service Worker: Fetch listener registered');
+logger.log('🔧 Content Cache Service Worker: Events registered.');
 
 // Import Angular's service worker
+logger.log('✅ Angular Service Worker: Registering...');
 importScripts('./ngsw-worker.js');
-console.log('✅ Angular NGSW registered successfully');
+logger.log('✅ Angular Service Worker: Registered.');
