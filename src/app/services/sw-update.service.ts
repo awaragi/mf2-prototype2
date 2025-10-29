@@ -26,10 +26,11 @@ export class SwUpdateService {
         }
       });
     }
-  }
+  } 
 
   private async checkForUpdate(): Promise<void> {
     try {
+      console.log('Checking for updates...');
       const updateAvailable = await this.swUpdate.checkForUpdate();
       if (updateAvailable) {
         console.log('Update available');

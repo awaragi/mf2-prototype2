@@ -1,3 +1,11 @@
 <app-update-notification />
 Hello Moto!
+
+@if (testData()) {
+  <div>
+    <h2>Test JSON Content:</h2>
+    <pre>{{ testData() | json }}</pre>
+  </div>
+}
+
 <router-outlet />
