@@ -1,6 +1,7 @@
 /// <reference lib="webworker" />
 
 import {Logger} from '../utils/logger';
+import {contentCache} from '../utils/idb'
 
 const logger = new Logger('[CACHE-SW]');
 
@@ -8,59 +9,63 @@ const sw = self as unknown as ServiceWorkerGlobalScope;
 
 logger.log('🔧 Content Cache Service Worker: Registering events.');
 
+/**
+ * Determines if a pathname matches content criteria for database caching
+ * @param pathname - The URL pathname to check
+ * @returns true if the path should be cached in the database
+ */
+function shouldCacheContent(pathname: string): boolean {
+  // Cache content from /api endpoints
+  return pathname.startsWith('/api/');
+}
+
+/**
+ * Handles fetch events for cacheable content
+ * @param event - The fetch event
+ * @param url - Parsed URL object
+ * @returns Response from database cache, or null if not found
+ */
+async function handleFetchEvent(event: FetchEvent, url: URL): Promise<Response | null> {
+  logger.debug('Checking cache for:', url.pathname);
+
+  // Try to get from database
+  const cached = await contentCache.getAsset(url.href);
+  if (cached) {
+    logger.log('Cache hit:', url.pathname);
+    return new Response(cached.blob, {
+      headers: {
+        'Content-Type': cached.type || 'application/octet-stream',
+        'X-Cache-Status': 'HIT'
+      }
+    });
+  }
+
+  logger.debug('Cache miss, not handling:', url.pathname);
+  return null;
+}
+
 // Add custom fetch event monitoring
-sw.addEventListener('fetch', (event) => {
+sw.addEventListener('fetch', async (event) => {
   const url = new URL(event.request.url);
 
-  // Special logging for /api requests
-  if (url.pathname.startsWith('/api')) {
-    logger.debug('API Request Intercepted:', {
-      url: event.request.url,
-      pathname: url.pathname,
-      method: event.request.method,
-      mode: event.request.mode,
-      credentials: event.request.credentials,
-      timestamp: new Date().toISOString()
-    });
+  // Check if this request matches content criteria
+  if (shouldCacheContent(url.pathname)) {
+    logger.debug('Content request intercepted:', url.pathname);
 
-    event.respondWith(
-      fetch(event.request)
-        .then(async (response) => {
-          logger.debug('API Response received, processing...');
-          // Clone the response so we can read it
-          const clonedResponse = response.clone();
+    let cachedResponse = null;
+    try {
+      cachedResponse = await handleFetchEvent(event, url);
+    } catch (error) {
+      logger.error('Fetch handler failed:', {
+        pathname: url.pathname,
+        error: error instanceof Error ? error.message : String(error)
+      });
+    }
 
-          try {
-            const data = await clonedResponse.json();
-            logger.debug('API Response Data:', {
-              pathname: url.pathname,
-              status: response.status,
-              statusText: response.statusText,
-              data: data,
-              timestamp: new Date().toISOString()
-            });
-          } catch (e) {
-            logger.debug('API Response (non-JSON):', {
-              pathname: url.pathname,
-              status: response.status,
-              statusText: response.statusText,
-              timestamp: new Date().toISOString()
-            });
-          }
-
-          logger.debug('Returning response to client');
-          return response;
-        })
-        .catch((error) => {
-          logger.error('API Request Failed:', {
-            pathname: url.pathname,
-            error: error.message,
-            timestamp: new Date().toISOString()
-          });
-          throw error;
-        })
-    );
-    return;
+    // Only intercept if we have a cached response
+    if (cachedResponse) {
+      event.respondWith(cachedResponse);
+    }
   }
 
   // Let the event bubble up to Angular's service worker
