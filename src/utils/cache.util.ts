@@ -1,4 +1,4 @@
-import { contentCache } from './idb';
+import { contentCache } from './idb.util';
 
 /**
  * Normalizes a URL for consistent cache storage and retrieval

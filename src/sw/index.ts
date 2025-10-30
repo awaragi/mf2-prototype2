@@ -1,7 +1,7 @@
 /// <reference lib="webworker" />
 
-import {Logger} from '../utils/logger';
-import {getCachedResponse} from '../utils/cache';
+import {Logger} from '../utils/logger.util.';
+import {getCachedResponse} from '../utils/cache.util';
 
 const logger = new Logger('[CACHE-SW]');
 

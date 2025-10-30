@@ -1,5 +1,5 @@
 import { Component, signal } from '@angular/core';
-import { cacheResource, clearAllCache } from '../../../utils/cache';
+import { cacheResource, clearAllCache } from '../../../utils/cache.util';
 
 @Component({
   selector: 'app-cache',

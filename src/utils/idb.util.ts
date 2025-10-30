@@ -16,7 +16,7 @@ export interface AssetRecord {
 /**
  * Content cache database manager
  */
-class ContentCacheDB {
+class ContentCacheIndexedDB {
   private db: Dexie;
 
   constructor() {
@@ -78,4 +78,4 @@ class ContentCacheDB {
 }
 
 // Export singleton instance
-export const contentCache = new ContentCacheDB();
+export const contentCache = new ContentCacheIndexedDB();
