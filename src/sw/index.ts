@@ -1,7 +1,8 @@
 /// <reference lib="webworker" />
 
 import {Logger} from '../utils/logger.util.';
-import {getCachedResponse} from '../utils/cache.util';
+import {getCachedResponse, normalizeUrl} from '../utils/cache.util';
+import {NO_CACHE_FLAG} from '../utils/constants.utils';
 
 const logger = new Logger('[CACHE-SW]');
 
@@ -11,62 +12,68 @@ logger.log('🔧 Content Cache Service Worker: Registering events.');
 
 /**
  * Determines if a pathname matches content criteria for database caching
- * @param pathname - The URL pathname to check
  * @returns true if the path should be cached in the database
+ * @param request
+ * @param pathname
  */
-function shouldCacheContent(pathname: string): boolean {
+function possibleCachedContent(request: Request, pathname: string): boolean {
+  // Don't cache if the no-cache flag is set
+  if (request.headers.has(NO_CACHE_FLAG)) {
+    return false;
+  }
+
   // Cache content from /api endpoints
-  return pathname.startsWith('/api/');
+  return pathname.startsWith('api/');
 }
 
 /**
- * Handles fetch events for cacheable content
- * @param event - The fetch event
- * @param url - Parsed URL object
- * @returns Response from database cache, or null if not found
+ * Handles fetch events for content requests
+ * @param event
  */
-async function handleFetchEvent(event: FetchEvent, url: URL): Promise<Response | null> {
-  logger.debug('Checking cache for:', url.pathname);
-
-  // Try to get from database using the utility function
-  const cachedResponse = await getCachedResponse(url.pathname);
-  if (cachedResponse) {
-    logger.log('Cache hit:', url.pathname);
-    return cachedResponse;
-  }
-
-  logger.debug('Cache miss, not handling:', url.pathname);
-  return null;
-}
-
-// Add custom fetch event monitoring
-sw.addEventListener('fetch', async (event) => {
-  const url = new URL(event.request.url);
-
+function handleFetchEvent(event: FetchEvent): void {
   // Check if this request matches content criteria
-  if (shouldCacheContent(url.pathname)) {
-    logger.debug('Content request intercepted:', url.pathname);
+  const request = event.request;
+  const pathname: string = normalizeUrl(new URL(request.url).pathname);
 
-    let cachedResponse = null;
-    try {
-      cachedResponse = await handleFetchEvent(event, url);
-    } catch (error) {
-      logger.error('Fetch handler failed:', {
-        pathname: url.pathname,
-        error: error instanceof Error ? error.message : String(error)
-      });
-    }
+  logger.debug('Handling fetch event:', pathname);
+  if (possibleCachedContent(request, pathname)) {
+    logger.debug('Content request intercepted:', pathname);
 
-    // Only intercept if we have a cached response
-    if (cachedResponse) {
-      event.respondWith(cachedResponse);
-    }
+    // respondWith must be called synchronously, so we pass it a Promise
+    event.respondWith(
+      (async () => {
+        try {
+          const cachedResponse = await getCachedResponse(pathname);
+
+          if (cachedResponse) {
+            logger.log('Cache hit:', pathname);
+            return cachedResponse;
+          }
+
+          // Otherwise, fall back to network
+          logger.debug('No cached response, fetching from network:', pathname);
+          return fetch(request);
+        } catch (error) {
+          logger.error('Fetch handler failed:', {
+            pathname: pathname,
+            error: error instanceof Error ? error.message : String(error)
+          });
+
+          // Fall back to network on error
+          return fetch(request);
+        }
+      })()
+    );
+  } else {
+    logger.debug('Request not candidate for content caching:', pathname);
   }
 
   // Let the event bubble up to Angular's service worker
-  // by not calling event.respondWith() here
-});
+  // by not calling event.respondWith() here for non-matching requests
+}
 
+// Add custom fetch event monitoring
+sw.addEventListener('fetch', handleFetchEvent);
 logger.log('🔧 Content Cache Service Worker: Events registered.');
 
 // Import Angular's service worker

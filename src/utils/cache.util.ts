@@ -53,8 +53,10 @@ export async function getCachedResponse(url: string): Promise<Response | null> {
   return new Response(cached.blob, {
     headers: {
       'Content-Type': cached.type || 'application/octet-stream',
-      'X-Cache-Status': 'HIT'
-    }
+      'Content-Length': cached.size != null ? String(cached.size) : undefined,
+      'X-Served-From': 'IndexedDB',
+      'ETag': cached.etag || undefined,
+    } as Record<string, string>,
   });
 }
 
