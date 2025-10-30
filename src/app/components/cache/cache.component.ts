@@ -1,5 +1,5 @@
 import { Component, signal } from '@angular/core';
-import { contentCache } from '../../../utils/idb';
+import { cacheResource, clearAllCache } from '../../../utils/cache';
 
 @Component({
   selector: 'app-cache',
@@ -23,24 +23,7 @@ export class CacheComponent {
 
       for (const url of this.ASSETS_TO_CACHE) {
         try {
-          const response = await fetch(url, { cache: 'no-cache' });
-
-          if (!response.ok) {
-            throw new Error(`Failed to fetch ${url}: ${response.status}`);
-          }
-
-          const blob = await response.blob();
-          const type = response.headers.get('Content-Type') || blob.type || 'application/octet-stream';
-          const etag = response.headers.get('ETag') || undefined;
-
-          await contentCache.putAsset({
-            url: url.startsWith('/') ? url.slice(1) : url,
-            blob,
-            type,
-            size: blob.size,
-            etag
-          });
-
+          await cacheResource(url);
           successCount++;
           this.statusMessage.set(`Cached ${successCount}/${this.ASSETS_TO_CACHE.length}...`);
         } catch (error) {
@@ -65,7 +48,7 @@ export class CacheComponent {
       this.isLoading.set(true);
       this.statusMessage.set('Clearing cache...');
 
-      await contentCache.clearAllAssets();
+      await clearAllCache();
 
       this.statusMessage.set('All cached assets cleared successfully!');
     } catch (error) {

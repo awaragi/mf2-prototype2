@@ -1,7 +1,7 @@
 /// <reference lib="webworker" />
 
 import {Logger} from '../utils/logger';
-import {contentCache} from '../utils/idb'
+import {getCachedResponse} from '../utils/cache';
 
 const logger = new Logger('[CACHE-SW]');
 
@@ -28,16 +28,11 @@ function shouldCacheContent(pathname: string): boolean {
 async function handleFetchEvent(event: FetchEvent, url: URL): Promise<Response | null> {
   logger.debug('Checking cache for:', url.pathname);
 
-  // Try to get from database
-  const cached = await contentCache.getAsset(url.href);
-  if (cached) {
+  // Try to get from database using the utility function
+  const cachedResponse = await getCachedResponse(url.pathname);
+  if (cachedResponse) {
     logger.log('Cache hit:', url.pathname);
-    return new Response(cached.blob, {
-      headers: {
-        'Content-Type': cached.type || 'application/octet-stream',
-        'X-Cache-Status': 'HIT'
-      }
-    });
+    return cachedResponse;
   }
 
   logger.debug('Cache miss, not handling:', url.pathname);
